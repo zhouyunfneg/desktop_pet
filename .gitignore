@@ -1,0 +1,8 @@
+node_modules/
+dist/
+out/
+*.log
+.DS_Store
+.vite/
+# QA 抓帧输出（scripts/qa-click.ps1 写的图）
+.shots/
