@@ -1,0 +1,100 @@
+/*
+ * theme-shim.css — the plain-CSS stand-in for Tailwind, for pages that load
+ * solid-glass.css WITHOUT Tailwind (single-file demos, internal tools, e-mail
+ * safe pages). Solid Glass only draws the edges of a pane; the fill, the
+ * corner radius and the control sizes normally come from Tailwind utilities
+ * generated out of shadcn's theme tokens. This file supplies just those.
+ *
+ * Load order: solid-glass.css → tint-presets.css (optional) → this file.
+ * Class names match Tailwind on purpose so upstream's own rules hit them.
+ * Layout, spacing and typography of a real page stay yours to write.
+ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  font-family: var(--font-sans, "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif);
+}
+body {
+  margin: 0;
+  color: var(--foreground);
+  background-color: var(--background);
+  /* The theme's --light-1/2/3 are designed to be seen through a pane; without
+     something behind, glass and flat look identical. */
+  background-image:
+    radial-gradient(52rem 30rem at 12% -6%, var(--light-1), transparent 70%),
+    radial-gradient(46rem 30rem at 92% 8%, var(--light-2), transparent 72%),
+    radial-gradient(60rem 34rem at 60% 108%, var(--light-3), transparent 70%);
+  background-attachment: fixed;
+  font-size: 14px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Fills the theme expects Tailwind to have written. */
+.bg-background { background-color: var(--background); }
+.bg-card { background-color: var(--card); }
+.bg-popover { background-color: var(--popover); }
+.bg-sidebar { background-color: var(--sidebar); }
+.bg-secondary { background-color: var(--secondary); color: var(--secondary-foreground); }
+.bg-muted { background-color: var(--muted); color: var(--muted-foreground); }
+.bg-destructive { background-color: color-mix(in oklch, var(--destructive) 12%, transparent); color: var(--destructive); }
+.bg-primary { background-color: var(--primary); color: var(--primary-foreground); }
+.text-foreground { color: var(--foreground); }
+.text-muted-foreground { color: var(--muted-foreground); }
+.text-primary { color: var(--primary); }
+
+/* Corners: Tailwind v4's scale, driven by the theme's own --radius. */
+.rounded-none { border-radius: 0; }
+.rounded-sm { border-radius: calc(var(--radius) - 4px); }
+.rounded-md { border-radius: calc(var(--radius) - 2px); }
+.rounded-lg { border-radius: var(--radius); }
+.rounded-xl { border-radius: calc(var(--radius) + 4px); }
+.rounded-2xl { border-radius: calc(var(--radius) + 8px); }
+.rounded-full { border-radius: 999px; }
+
+/* Control boxes: the theme styles these by [data-slot], sizes are ours. */
+[data-slot="button"] {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px;
+  border: 1px solid transparent; border-radius: var(--radius); cursor: pointer;
+  font-size: 13.5px; line-height: 1.4; white-space: nowrap; text-decoration: none;
+}
+[data-slot="button"][data-variant="outline"] { background-color: transparent; }
+[data-slot="button"][data-variant="ghost"] { background-color: transparent; border-color: transparent; }
+[data-slot="badge"] {
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px;
+  border: 1px solid transparent; border-radius: var(--radius); font-size: 12px; line-height: 1.6;
+}
+[data-slot="input"], [data-slot="textarea"] {
+  width: 100%; padding: 8px 11px; border: 1px solid transparent;
+  border-radius: var(--radius); background-clip: padding-box; font: inherit;
+}
+[data-slot="textarea"] { min-height: 62px; resize: vertical; }
+[data-slot="select-trigger"] {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px;
+  border: 1px solid transparent; border-radius: var(--radius); background-clip: padding-box; cursor: pointer;
+}
+[data-slot="separator"] { height: 1px; border: 0; background: var(--border); margin: 10px 0; }
+[data-slot="tabs-list"] { display: inline-flex; gap: 4px; padding: 3px; border-radius: var(--radius); background-color: var(--panel); }
+[data-slot="tabs-trigger"] {
+  padding: 5px 12px; border: 1px solid transparent; border-radius: var(--radius);
+  background: none; cursor: pointer; color: var(--muted-foreground); font: inherit;
+}
+[data-slot="tabs-trigger"][data-active]:not([data-active="false"]) { color: var(--foreground); }
+[data-slot="bubble-content"] {
+  display: inline-block; max-width: 100%; padding: 9px 13px;
+  border: 1px solid transparent; border-radius: calc(var(--radius) * 0.9);
+}
+[data-slot="field-label"] { display: block; font-size: 12.5px; font-weight: 600; }
+
+/* Surfaces. Padding/radius are what a shadcn component would have carried. */
+.bg-card, .bg-popover, .glass-panel, [data-slot="sidebar-inner"] { padding: 13px; border-radius: var(--radius); }
+.glass-panel { background-color: var(--panel); }
+
+/* Small helpers used by the preview; replace with your own layout. */
+.sg-row { display: flex; align-items: center; gap: 8px; }
+.sg-between { justify-content: space-between; }
+.sg-col { display: flex; flex-direction: column; gap: 8px; }
+.sg-spacer { flex: 1; }
+.sg-note { font-size: 12.5px; color: var(--muted-foreground); }
+.sg-mono { font-family: var(--font-mono, ui-monospace, SFMono-Regular, Consolas, monospace); font-size: 12.5px; }

@@ -135,6 +135,12 @@ function closeSession(s: Session): void {
   }
 }
 
+/**
+ * 读一个图标的显示名。
+ * 任何一步失败都必须报「读不到」而不是返回上一轮的内容：远端缓冲是复用的，
+ * 写 LVITEM 失败时 LVM_GETITEMTEXTW 会把上一次那个名字再填一遍，
+ * 于是两个图标同名，按名字回匹坐标就会张冠李戴。
+ */
 function readItemText(s: Session, index: number): string {
   const it = buf(ITEM_SIZE);
   it.writeUInt32LE(LVIF_TEXT, 0);
@@ -142,28 +148,35 @@ function readItemText(s: Session, index: number): string {
   it.writeInt32LE(0, 8);
   it.writeBigUInt64LE(s.textAddr, 24);
   it.writeInt32LE(TEXT_CAP, 32);
-  WriteProcessMemory(s.hProc as never, Number(s.itemAddr), it, ITEM_SIZE, s.written as never);
-  SendMessageW(s.lv as never, LVM_GETITEMTEXTW, index, Number(s.itemAddr));
+  if (!WriteProcessMemory(s.hProc as never, Number(s.itemAddr), it, ITEM_SIZE, s.written as never)) {
+    console.warn(`[icons] 写 LVITEM 失败（index=${index}），跳过该图标`);
+    return "";
+  }
+  const got = Number(SendMessageW(s.lv as never, LVM_GETITEMTEXTW, index, Number(s.itemAddr)));
+  if (got <= 0) return "";
   const t = buf(TEXT_CAP * 2);
-  ReadProcessMemory(s.hProc as never, Number(s.textAddr), t, TEXT_CAP * 2, s.written as never);
+  if (!ReadProcessMemory(s.hProc as never, Number(s.textAddr), t, TEXT_CAP * 2, s.written as never)) return "";
   const u = t.toString("utf16le");
   const nul = u.indexOf("\0");
   return (nul >= 0 ? u.slice(0, nul) : u).trim();
 }
 
-function readItemPos(s: Session, index: number): { x: number; y: number } {
-  SendMessageW(s.lv as never, LVM_GETITEMPOSITION, index, Number(s.pointAddr));
+/** 读一个图标的坐标；拿不到返回 null（调用方跳过它，不能拿 (0,0) 当真实位置） */
+function readItemPos(s: Session, index: number): { x: number; y: number } | null {
+  if (!SendMessageW(s.lv as never, LVM_GETITEMPOSITION, index, Number(s.pointAddr))) return null;
   const p = buf(8);
-  ReadProcessMemory(s.hProc as never, Number(s.pointAddr), p, 8, s.written as never);
+  if (!ReadProcessMemory(s.hProc as never, Number(s.pointAddr), p, 8, s.written as never)) return null;
   return { x: p.readInt32LE(0), y: p.readInt32LE(4) };
 }
 
-function writeItemPos(s: Session, index: number, x: number, y: number): void {
+/** 写一个图标的坐标；返回是否真的写进去了 */
+function writeItemPos(s: Session, index: number, x: number, y: number): boolean {
   const p = buf(8);
   p.writeInt32LE(Math.round(x), 0);
   p.writeInt32LE(Math.round(y), 4);
-  WriteProcessMemory(s.hProc as never, Number(s.pointAddr), p, 8, s.written as never);
-  SendMessageW(s.lv as never, LVM_SETITEMPOSITION32, index, Number(s.pointAddr));
+  if (!WriteProcessMemory(s.hProc as never, Number(s.pointAddr), p, 8, s.written as never)) return false;
+  // LVM_SETITEMPOSITION32 返回非 0 才算成功；返回 0 时 explorer 根本没挪这个图标
+  return Number(SendMessageW(s.lv as never, LVM_SETITEMPOSITION32, index, Number(s.pointAddr))) !== 0;
 }
 
 /** 读出桌面上所有图标的显示名与坐标；失败返回 null */
@@ -175,8 +188,10 @@ export function readIcons(): IconInfo[] | null {
     const out: IconInfo[] = [];
     for (let i = 0; i < count; i++) {
       const name = readItemText(s, i);
-      const { x, y } = readItemPos(s, i);
-      out.push({ index: i, name, x, y });
+      if (!name) continue;
+      const pos = readItemPos(s, i);
+      if (!pos) continue;
+      out.push({ index: i, name, x: pos.x, y: pos.y });
     }
     return out;
   } catch (err) {
@@ -187,14 +202,20 @@ export function readIcons(): IconInfo[] | null {
   }
 }
 
-/** 批量写图标坐标；成功返回 true */
+/** 批量写图标坐标；只要有一个没写成就返回 false，让上层知道这批没落位 */
 export function applyPositions(updates: { index: number; x: number; y: number }[]): boolean {
   if (updates.length === 0) return true;
   const s = openSession();
   if (!s) return false;
   try {
-    for (const u of updates) writeItemPos(s, u.index, u.x, u.y);
-    return true;
+    let failed = 0;
+    for (const u of updates) {
+      if (!writeItemPos(s, u.index, u.x, u.y)) {
+        failed += 1;
+        console.warn(`[icons] 坐标写入失败：index=${u.index} @ ${u.x},${u.y}`);
+      }
+    }
+    return failed === 0;
   } catch (err) {
     console.warn("[icons] applyPositions 失败", err);
     return false;

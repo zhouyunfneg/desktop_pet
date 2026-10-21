@@ -2,15 +2,29 @@ import { app } from "electron";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { validateConfig, type AppConfig } from "../shared/config";
-import { type RoamMode, type Settings } from "../shared/ipc";
+import {
+  normalizeCarry,
+  normalizeFold,
+  normalizeSettings,
+  normalizeUndo,
+  type CarryLog,
+  type FoldLog,
+  type FoldRecord,
+  type HiddenRecord,
+  type MoveRecord,
+  type MoveSession,
+  type UndoLog
+} from "../shared/normalize";
+import { type Settings } from "../shared/ipc";
 
 /**
  * 极简 JSON 存档。
  * 没用 electron-store：它 v9+ 是 ESM-only、和 CJS 主进程冲突；这里几十行解决且零依赖，
  * 读写都是「剥 BOM + 原子替换 + 去抖合并」。
  *
- * 成长系统已按需求取消，所以只剩两份存档：settings.json（窗口与漫游）、
- * config.json（分类规则与区域）。
+ * 成长系统已按需求取消。现在四份存档：settings.json（窗口与漫游）、config.json（分类规则与区域）、
+ * organize.json（图标坐标的撤销栈）、fold.json（真搬文件的账），外加 carry.json（叼着没放的那一个）。
+ * 存档的清洗函数都是纯函数，放在 shared/normalize.ts 里以便单测。
  */
 class JsonStore<T extends object> {
   private readonly file: string;
@@ -72,68 +86,20 @@ class JsonStore<T extends object> {
   }
 }
 
-const num = (v: unknown, fallback: number): number =>
-  typeof v === "number" && Number.isFinite(v) ? v : fallback;
-
-/** 一次整理会话 = 一批图标的原始坐标；撤销就是把它们写回去 */
-export interface MoveRecord {
-  /** 图标显示名（index 会变，按名字回匹更稳） */
-  name: string;
-  x: number;
-  y: number;
-}
-export interface MoveSession {
-  id: string;
-  at: number;
-  moves: MoveRecord[];
-}
-export interface UndoLog {
-  version: 1;
-  sessions: MoveSession[];
-}
-
-function normalizeUndo(raw: unknown): UndoLog {
-  const o = (raw ?? {}) as Partial<UndoLog>;
-  const sessions = Array.isArray(o.sessions) ? o.sessions : [];
-  return {
-    version: 1,
-    sessions: sessions
-      .map((s) => ({
-        id: typeof s?.id === "string" ? s.id : `s-${s?.at ?? 0}`,
-        at: num(s?.at, 0),
-        moves: (Array.isArray(s?.moves) ? s.moves : [])
-          .filter((m) => typeof m?.name === "string" && Number.isFinite(m?.x) && Number.isFinite(m?.y))
-          .map((m) => ({ name: m.name, x: Math.round(m.x), y: Math.round(m.y) }))
-      }))
-      // 空会话不占位，免得撤销点了没反应
-      .filter((s) => s.moves.length > 0)
-  };
-}
-
-/** 老版本/手改坏的字段一律回落到默认值，不让存档有能力炸掉启动 */
-function normalizeSettings(raw: unknown): Settings {
-  const o = (raw ?? {}) as Partial<Settings> & { origin?: unknown; stage?: unknown };
-  const roam: RoamMode =
-    o.roamMode === "flee" || o.roamMode === "wander" || o.roamMode === "stay" ? o.roamMode : "chase";
-  const keep = num(o.keepDistance, 380);
-  const keepDistance = Math.min(Math.max(Math.round(keep), 150), 900);
-  return {
-    version: 1,
-    topmost: typeof o.topmost === "boolean" ? o.topmost : true,
-    roamMode: roam,
-    showZones: typeof o.showZones === "boolean" ? o.showZones : false,
-    // 旧存档里的 origin 字段直接丢弃：狗窗现在铺满工作区，窗口位置没意义了
-    // 220 是上一版的默认值，没人手动调过；这一版把跟距调远以免鼠标误触，直接迁移过去
-    keepDistance: keepDistance === 220 ? 380 : keepDistance
-  };
-}
-
 export const settingsStore = new JsonStore<Settings>("settings.json", normalizeSettings);
 export const configStore = new JsonStore<AppConfig>("config.json", (raw) => validateConfig(raw));
 export const organizeStore = new JsonStore<UndoLog>("organize.json", normalizeUndo);
+/** 狗嘴里正叼着（临时隐藏）的那一个文件；崩溃后靠它把文件变回来 */
+export const carryStore = new JsonStore<CarryLog>("carry.json", normalizeCarry);
+/** 真搬进分类文件夹的账：撤销按它把文件搬回来，崩溃后靠它知道哪些已经搬了 */
+export const foldStore = new JsonStore<FoldLog>("fold.json", normalizeFold);
+
+export type { FoldRecord, HiddenRecord, MoveRecord, MoveSession, UndoLog };
 
 app.on("before-quit", () => {
   settingsStore.flush();
   configStore.flush();
   organizeStore.flush();
+  carryStore.flush();
+  foldStore.flush();
 });

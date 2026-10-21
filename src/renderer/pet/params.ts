@@ -155,3 +155,54 @@ export function headAnchor(p: DogParams, canvasX: number, groundY: number, dir: 
     y: groundY - (p.headY + p.headR * 0.9) * p.scale
   };
 }
+
+/**
+ * 前胸锚点 + 判定半径（点这里 = 让狗播报新闻）。
+ * 局部坐标取「躯干最前面往里一点、肚子和背的中间高度」，就是狗的胸口；
+ * 它和头顶圆（更高）、屁股（更后）都不重叠，所以三个部位能分开判。
+ */
+export function chestAnchor(
+  p: DogParams,
+  canvasX: number,
+  groundY: number,
+  dir: 1 | -1
+): { x: number; y: number; r: number } {
+  return {
+    x: canvasX + dir * (p.bodyFront - 6) * p.scale,
+    y: groundY - ((p.belly + p.back) / 2) * p.scale,
+    r: p.headR * 0.9 * p.scale
+  };
+}
+
+/**
+ * 嘴尖锚点（叼东西时用）。
+ * 与 shiba.ts 里 mouth() 的绘制位置同源：头中心 (headX, headY)，
+ * 嘴在局部坐标 (headR*1.18, -headR*0.44)，而局部 y 向上为正 → 画布 y 要反过来。
+ * 叼东西时头是抬着的，所以按 headDip / headLift 为 0 算。
+ */
+export function mouthAnchor(p: DogParams, canvasX: number, groundY: number, dir: 1 | -1): { x: number; y: number } {
+  return {
+    x: canvasX + dir * (p.headX + p.headR * 1.18) * p.scale,
+    y: groundY - (p.headY - p.headR * 0.44) * p.scale
+  };
+}
+
+/** 命中区上报的判定输入：狗的位置 + 朝向 */
+export interface ShapeStamp {
+  x: number;
+  y: number;
+  dir: 1 | -1;
+}
+
+/**
+ * 这一帧要不要重新上报命中区。
+ *
+ * 迟滞是为了不让 SetWindowRgn 每帧都调（窗口边缘会闪白边），但**掉头必须立刻重报**：
+ * 狗的身体两侧宽度差很大（成犬朝头那一侧 144px、朝屁股那一侧 77px，差 67px），
+ * 区域还留在上一个朝向时，头那一侧就有一截被窗口裁掉 —— 看起来像「掉头时狗头被遮住一块」。
+ */
+export function shapeNeedsReport(prev: ShapeStamp | null, now: ShapeStamp, walkThreshold = 24): boolean {
+  if (!prev) return true;
+  if (prev.dir !== now.dir) return true;
+  return Math.abs(now.x - prev.x) >= walkThreshold || Math.abs(now.y - prev.y) >= walkThreshold;
+}

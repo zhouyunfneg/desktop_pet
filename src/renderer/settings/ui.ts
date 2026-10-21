@@ -39,16 +39,34 @@ export async function mountSettings(root: El): Promise<void> {
 
   root.replaceChildren();
 
+  const head = h(
+    "header",
+    { class: "page-head" },
+    h("h1", { text: "小柴的设置" }),
+    h("p", { text: "改一项就立刻存好，不用找「保存」按钮。" })
+  );
+  const headTitle = head.querySelector("h1");
+
+  // ---------- 小狗 ----------
+  const nameInput = h("input", {
+    type: "text",
+    maxlength: "24",
+    placeholder: "小柴",
+    "aria-label": "狗的名字"
+  }) as HTMLInputElement;
+  const dogCard = card(
+    "小狗",
+    h("label", { class: "row inline" }, h("span", { text: "名字" }), nameInput),
+    h("p", { class: "hint" }, "右键菜单和收纳确认的标题都用这个名字。最长 12 个字，多了会自动截掉。")
+  );
+
   // ---------- 喂食 ----------
   const deskLine = h("p", { class: "muted" });
-  const feedBtn = h("button", { text: "开启拖喂 30 秒" });
-  const feedHint = h("span", { class: "muted" });
   const feeding = card(
     "喂食",
     deskLine,
     h("p", { class: "muted" }, "把要丢的文件直接拖到碗上，狗会跑过去吃掉 —— 文件进回收站，不是永久删除。"),
-    h("div", { class: "row" }, feedBtn, feedHint),
-    h("p", { class: "hint" }, "直接从资源管理器把文件拖到碗上就能投喂（碗一直在命中区里）。下面的开关只是把命中区临时扩大到整块画布，比如想直接丢到狗头上。")
+    h("p", { class: "hint" }, "碗一直在可点范围内，从资源管理器拖文件到碗上就能投喂，不需要任何开关；不想瞄着碗丢就用右键菜单的「喂文件…」挑。")
   );
 
   // ---------- 窗口 ----------
@@ -72,6 +90,14 @@ export async function mountSettings(root: El): Promise<void> {
   }
   const dist = h("input", { type: "range", min: "150", max: "900", step: "10" }) as HTMLInputElement;
   const distVal = h("span", { class: "muted" });
+  // 滑杆已填的那一段用强调色，靠一个 CSS 变量把百分比交给样式表画
+  const paintFill = (): void => {
+    const min = Number(dist.min);
+    const max = Number(dist.max);
+    const pct = ((Number(dist.value) - min) / (max - min)) * 100;
+    dist.style.setProperty("--fill", `${Math.round(Math.min(100, Math.max(0, pct)))}%`);
+  };
+  dist.addEventListener("input", paintFill);
   const roamCard = card(
     "漫游",
     h("label", { class: "row inline" }, h("span", { text: "默认行为" }), roamSel),
@@ -101,7 +127,7 @@ export async function mountSettings(root: El): Promise<void> {
       rulesBody
     ),
     h("div", { class: "row" }, addRuleBtn),
-    h("p", { class: "hint" }, "这张表决定 M4「哪类文件搬去哪个区域」。")
+    h("p", { class: "hint" }, "这张表决定「哪类图标搬去哪个区域」。")
   );
 
   // ---------- 区域 ----------
@@ -132,19 +158,21 @@ export async function mountSettings(root: El): Promise<void> {
   );
 
   // ---------- 整理 ----------
+  // 另有两种模式已封存、代码留着：「收纳进分类文件夹」（会真搬文件，入口在 ipc.askFoldNow /
+  // organize.runFoldOrganize）和「只排整齐」（organize.runColumns）。要放开就往这个菜单/卡片上加回入口。
   const previewBtn = h("button", { class: "ghost", text: "预览会搬哪些" });
-  const organizeBtn = h("button", { text: "立即整理桌面" });
+  const organizeBtn = h("button", { class: "primary", text: "立即整理桌面" });
   const undoBtn = h("button", { class: "ghost", text: "撤销上一次整理" });
   const showZonesBox = h("input", { type: "checkbox" }) as HTMLInputElement;
   const organizeCard = card(
     "整理桌面",
     h("label", { class: "row inline" }, showZonesBox, h("span", { text: "在桌面上常驻显示区域框" })),
     h("div", { class: "row" }, previewBtn, organizeBtn, undoBtn),
-    h("p", { class: "hint" }, "按分类规则把桌面顶层文件搬进各区域在桌面下的子目录（移动不是删除，可整批撤销）。食盆与已有文件夹不会被扫。")
+    h("p", { class: "hint" }, "按分类规则把桌面图标挪进各区域（只挪位置，文件不动，可整批撤销）。食盆与已有文件夹不会被扫。")
   );
 
   const status = h("div", { class: "status", text: "读取中…" });
-  root.append(feeding, windows, roamCard, rulesCard, zonesCard, organizeCard, status);
+  root.append(head, dogCard, feeding, windows, roamCard, rulesCard, zonesCard, organizeCard, status);
 
   // ---------- 提交流程 ----------
   function setStatus(text: string, kind = ""): void {
@@ -175,15 +203,13 @@ export async function mountSettings(root: El): Promise<void> {
     if (!state) return;
     deskLine.textContent = `真实桌面目录：${state.desktopDir}`;
 
-    feedBtn.textContent = state.feedingSecondsLeft > 0 ? "关闭整块画布可点" : "开启整块画布可点 30 秒";
-    feedHint.textContent =
-      state.feedingSecondsLeft > 0
-        ? `命中区已扩大到整块画布，还剩 ${state.feedingSecondsLeft} 秒`
-        : "平时只有狗和食盆接收点击，其余位置直接穿透到下层窗口";
     topmostBox.checked = state.settings.topmost;
+    if (document.activeElement !== nameInput) nameInput.value = state.settings.petName;
+    if (headTitle) headTitle.textContent = `${state.settings.petName}的设置`;
     roamSel.value = state.settings.roamMode;
     dist.value = String(state.settings.keepDistance);
     distVal.textContent = `${state.settings.keepDistance} px`;
+    paintFill();
     showZonesBox.checked = state.settings.showZones;
     undoBtn.disabled = !state.canUndo;
 
@@ -292,13 +318,9 @@ export async function mountSettings(root: El): Promise<void> {
   }
 
   // ---------- 事件 ----------
-  feedBtn.addEventListener("click", () => {
-    const on = (state?.feedingSecondsLeft ?? 0) > 0;
-    void commit(async () => {
-      await api.setFeedingMode(on ? 0 : 30);
-      return api.getState();
-    }, true);
-    setStatus(on ? "拖喂模式已关闭" : "拖喂模式开着，30 秒内可以直接拖到碗上", "ok");
+  nameInput.addEventListener("change", () => {
+    // 空字符串交给主进程回默认名：菜单头部不能是空白
+    void commit(() => api.patchSettings({ petName: nameInput.value }));
   });
   topmostBox.addEventListener("change", () => {
     void commit(() => api.patchSettings({ topmost: topmostBox.checked }));
@@ -320,6 +342,7 @@ export async function mountSettings(root: El): Promise<void> {
     };
     void commit(() => api.saveConfig(draft));
   });
+
   addZoneBtn.addEventListener("click", () => {
     const rule = draft.rules[0];
     const wa = state?.workArea ?? { x: 0, y: 0, w: 1920, h: 1080 };
@@ -354,8 +377,8 @@ export async function mountSettings(root: El): Promise<void> {
       .then((r) =>
         setStatus(
           r.moved.length
-            ? `将把 ${r.moved.length} 个文件搬进 ${r.zones.length} 个区域${r.skipped.length ? `；${r.skipped.length} 个会被跳过` : ""}`
-            : "没有匹配到可整理的文件",
+            ? `将把 ${r.moved.length} 个图标搬进 ${r.zones.length} 个区域${r.skipped.length ? `；${r.skipped.length} 个会被跳过` : ""}`
+            : "没有匹配到可整理的图标",
           r.moved.length ? "ok" : ""
         )
       )
@@ -371,8 +394,8 @@ export async function mountSettings(root: El): Promise<void> {
         apply(await api.getState());
         setStatus(
           r.moved.length
-            ? `已把 ${r.moved.length} 个文件搬进 ${r.zones.length} 个区域${r.skipped.length ? `；${r.skipped.length} 个跳过` : ""}`
-            : "没有需要搬的文件",
+            ? `已把 ${r.moved.length} 个图标搬进 ${r.zones.length} 个区域${r.skipped.length ? `；${r.skipped.length} 个跳过` : ""}`
+            : "没有需要搬的图标",
           r.moved.length ? "ok" : ""
         );
       })
@@ -389,7 +412,7 @@ export async function mountSettings(root: El): Promise<void> {
         apply(await api.getState());
         setStatus(
           r.restored
-            ? `已把 ${r.restored} 个文件搬回桌面${r.failed.length ? `；${r.failed.length} 个失败` : ""}`
+            ? `已把 ${r.restored} 个图标放回原位${r.failed.length ? `；${r.failed.length} 个失败` : ""}`
             : "没有可撤销的整理",
           r.restored ? "ok" : ""
         );
@@ -404,6 +427,22 @@ export async function mountSettings(root: El): Promise<void> {
   } catch (err) {
     setStatus(`读取设置失败：${err instanceof Error ? err.message : String(err)}`, "err");
   }
+
+  // 这扇窗没订阅 stateChanged，而菜单/托盘也能改置顶、区域开关和 canUndo，
+  // 所以重新获得焦点时补拉一次全量，界面不会一直停在打开那一刻的旧快照。
+  // 但光标还在输入控件里时必须跳过：apply() 会整体换掉 draft，而表格行只在
+  // id 签名变化时重建，输入框的闭包还指向旧对象 —— 那时刷新会让人改了一半的内容静默丢失。
+  window.addEventListener("focus", () => {
+    const ae = document.activeElement;
+    if (
+      ae instanceof HTMLInputElement ||
+      ae instanceof HTMLSelectElement ||
+      ae instanceof HTMLTextAreaElement
+    ) {
+      return;
+    }
+    void commit(() => api.getState(), true);
+  });
 }
 
 function splitExts(text: string): string[] {

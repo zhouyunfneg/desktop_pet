@@ -8,12 +8,12 @@ import { extOf, type AppConfig, type Rect } from "./config";
  * 语义 = 只挪图标位置，文件留在原地（可撤销：记原始坐标）。
  */
 
-/** FFI 读到的一个桌面图标 */
+/** FFI 读到的一个桌面图标（坐标已由上层换算成 DIP，与区域配置同一单位） */
 export interface IconInput {
   index: number;
   /** 显示名（Windows 默认隐藏扩展名，可能不含 .xxx） */
   name: string;
-  /** 屏幕物理像素（桌面 ListView 客户区 = 屏幕） */
+  /** 屏幕坐标（DIP） */
   x: number;
   y: number;
 }
@@ -57,7 +57,7 @@ export interface OrganizePlan {
   zones: ZoneSummary[];
 }
 
-/** 图标网格排布：单元格尺寸取 Windows 桌面默认图标间距（物理像素） */
+/** 图标网格排布：单元格尺寸取 Windows 桌面默认图标间距（DIP，100% 缩放下即 76×101 像素） */
 export const CELL_W = 76;
 export const CELL_H = 101;
 const PAD = 10;
@@ -205,4 +205,39 @@ export function buildPlan(
   }
 
   return { moves, skipped, zones: [...byZone.values()] };
+}
+
+/** 撤销时按显示名回匹到的当前图标位置 */
+export interface UndoTarget {
+  index: number;
+  x: number;
+  y: number;
+}
+
+/**
+ * 撤销用的名字回匹：把记录里的原始坐标对到当前桌面图标的 index。
+ *
+ * 桌面可能重排 item 顺序，所以只认显示名；比较时忽略大小写与首尾空白 ——
+ * explorer 返回的名字带不带空格、显示名的大小写差异，都不该让撤销悄悄失灵。
+ */
+export function matchUndoTargets(
+  records: { name: string; x: number; y: number }[],
+  icons: { index: number; name: string }[]
+): { updates: UndoTarget[]; failed: SkippedFile[] } {
+  const byName = new Map<string, number>();
+  for (const ic of icons) {
+    const key = ic.name.trim().toLowerCase();
+    if (!byName.has(key)) byName.set(key, ic.index);
+  }
+  const updates: UndoTarget[] = [];
+  const failed: SkippedFile[] = [];
+  for (const m of records) {
+    const idx = byName.get(m.name.trim().toLowerCase());
+    if (idx === undefined) {
+      failed.push({ name: m.name, reason: "图标已不在桌面" });
+      continue;
+    }
+    updates.push({ index: idx, x: m.x, y: m.y });
+  }
+  return { updates, failed };
 }

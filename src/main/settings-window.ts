@@ -22,7 +22,8 @@ export function openSettings(): BrowserWindow {
     minWidth: 400,
     minHeight: 480,
     title: "桌面宠物 · 设置",
-    backgroundColor: "#F6F4F0",
+    // 与渲染层 --background（Solid Glass 的 warm 奶油底）同一色，开窗不闪白
+    backgroundColor: "#EAE5DD",
     show: false,
     autoHideMenuBar: true,
     webPreferences: {

@@ -24,7 +24,7 @@ export function ensureTray(dataUrl: string): void {
   });
 }
 
-/** 菜单项文本是快照（成长进度、拖喂模式），状态变了要主动重刷一次 */
+/** 菜单项文本是快照（能不能撤销、当前跟随模式），状态变了要主动重刷一次 */
 export function refreshTrayMenu(): void {
   tray?.setContextMenu(buildTrayMenu());
 }

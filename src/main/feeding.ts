@@ -1,18 +1,24 @@
 import { dialog } from "electron";
+import { MAX_BATCH } from "../shared/feed-guard";
 import type { FeedReply } from "../shared/ipc";
 import { feedFiles } from "./feed";
 import { pushAte } from "./ipc";
 
 /**
- * 喂食的统一入口：菜单「喂文件…」、食盆文件夹 watcher、渲染层投放，
- * 三条路最后都走这里，保证「结算 + 通知狗」只有一份实现。
+ * 喂食的统一入口：菜单「喂文件…」、渲染层拖放（走 IPC 时由渲染层自己播报），
+ * 都收在这里，保证「结算 + 通知狗」只有一份实现。
  */
 export async function feedPaths(paths: string[]): Promise<FeedReply> {
   const reply = await feedFiles(paths);
-  if (reply.ate.length > 0) {
-    // 通知狗跑去吃；成长系统已取消，这里不再带数值
-    pushAte({ items: reply.ate });
-  }
+  // 被单次上限截掉、或者一个都没吃下时都要交代一句，
+  // 否则从菜单投喂的用户完全不知道文件为什么还在原地
+  const note =
+    reply.overflow > 0
+      ? `剩下 ${reply.overflow} 个没吃，一次最多 ${MAX_BATCH} 个`
+      : reply.ate.length === 0 && reply.rejected.length > 0
+        ? `咬不动：${reply.rejected[0].reason}`
+        : undefined;
+  if (reply.ate.length > 0 || note) pushAte({ items: reply.ate, note });
   return reply;
 }
 

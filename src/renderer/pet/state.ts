@@ -22,6 +22,8 @@ export interface CarryPoint {
   fx: number;
   fy: number;
   color: string;
+  /** 分类中文名（"图片"/"文档"…）：狗嘴上的假图标照它画，见 effects.drawCarried */
+  category: string;
   drop: boolean;
   index: number;
   name: string;
@@ -66,6 +68,25 @@ export class Dog {
   private onCarryArrive: ((p: CarryPoint) => void) | null = null;
   /** 到达一个路点后的停留时间（抓/放的动作时长） */
   private dwell = 0;
+  /** 当前叼着的那个路点（抓到的图标本体）；null = 嘴里没东西 */
+  private carried: CarryPoint | null = null;
+  /** 转圈动作开始时的朝向：转完一圈要转回原来那面，不能拿中途的朝向当基准 */
+  private spinBase: 1 | -1 = 1;
+
+  /** 嘴里叼着哪个桌面图标（渲染层据此让主进程把真图标藏起来） */
+  get carriedName(): string | null {
+    return this.carried?.name ?? null;
+  }
+
+  /** 叼着的东西是什么分类：嘴上的假图标照这个画 */
+  get carriedCategory(): string | null {
+    return this.carried?.category ?? null;
+  }
+
+  /** 叼着的东西要送去哪个区域（假图标沿用它的配色） */
+  get carriedColor(): string | null {
+    return this.carried?.color ?? null;
+  }
 
   get params(): DogParams {
     return paramsFor(this.stage);
@@ -100,6 +121,7 @@ export class Dog {
   startCarry(points: CarryPoint[], onArrive: (p: CarryPoint) => void): void {
     this.carryQ = points.slice(0, 60);
     this.onCarryArrive = onArrive;
+    this.carried = null;
     this.dwell = 0;
     if (this.carryQ.length > 0) this.enter("carry", 9999);
   }
@@ -128,7 +150,23 @@ export class Dog {
 
   /** 菜单「回到食盆旁」与不跟随模式共用：走回右下角蹲着 */
   recall(): void {
+    this.cancelCarry();
     this.startMeal(0);
+  }
+
+  /**
+   * 放弃本轮搬运：队列必须清空。
+   * 待机时会优先续搬没放下的路点（见 idleDecision），所以撤销整理、叫狗回来这类
+   * 「这批作废了」的入口一定要主动清队列，否则狗会空跑剩下的路点，
+   * 而搬运期间命中区被放大到整块画布，桌面会点不动。
+   */
+  cancelCarry(): void {
+    if (this.carryQ.length === 0) return;
+    this.carryQ = [];
+    this.onCarryArrive = null;
+    this.carried = null;
+    this.dwell = 0;
+    if (this.behavior === "carry") this.enter("idle", rand(1.5, 3));
   }
 
   /**
@@ -148,6 +186,9 @@ export class Dog {
   beginDrag(): void {
     this.target = null;
     this.carryQ = [];
+    this.onCarryArrive = null;
+    this.carried = null;
+    this.dwell = 0;
     this.enter("drag", 9999);
   }
 
@@ -227,6 +268,13 @@ export class Dog {
       this.dir = this.mouse.x > this.x ? 1 : -1;
     }
 
+    // step 里的 seek/dragTo 会挪位置、上面的朝向判定会翻面，Pose 必须带回这一帧的
+    // 最终状态：否则画的是上一帧的狗，而命中区与气泡锚点用的是最新位置，
+    // 奔跑时两者能差出二十几像素，表现为「点看到的狗却点不中」。
+    pose.x = this.x;
+    pose.groundY = this.y;
+    pose.dir = this.dir;
+
     return pose;
   }
 
@@ -239,7 +287,7 @@ export class Dog {
         this.eatStep(pose);
         return;
       case "drag":
-        this.dragPose(pose);
+        this.dragPose(pose, dt);
         return;
       case "carry":
         this.carryStep(dt, pose, p);
@@ -306,6 +354,7 @@ export class Dog {
     const t = this.carryQ[0];
     if (!t) {
       this.onCarryArrive = null;
+      this.carried = null;
       this.enter("idle", rand(1.5, 3));
       return;
     }
@@ -319,6 +368,8 @@ export class Dog {
     if (Math.abs(dx) <= 16) {
       this.onCarryArrive?.(t);
       this.carryQ.shift();
+      // 走到图标处 = 叼起来；走到区域放下 = 嘴里空了
+      this.carried = t.drop ? null : t;
       this.dwell = 0.32;
       this.behavior = "carry";
       return;
@@ -330,6 +381,13 @@ export class Dog {
     this.clampPos();
     if (Math.abs(dx) > 2) this.dir = dx > 0 ? 1 : -1;
     this.animateMove(pose, dt, true);
+    if (this.carried) {
+      // 嘴里有东西：嘴保持咬着、头抬稳，否则图标像飘在旁边而不是被叼着
+      pose.mouth = 0.8;
+      pose.tongue = 0;
+      pose.headLift = 5;
+      pose.headTilt = -0.04;
+    }
     this.behavior = "carry";
   }
 
@@ -349,13 +407,15 @@ export class Dog {
     }
   }
 
-  private dragPose(pose: Pose): void {
+  private dragPose(pose: Pose, dt: number): void {
     pose.earPerk = 0.7;
     pose.headTilt = -0.12;
     pose.tailSwing = Math.sin(this.clock * TAU * 3.4) * 0.5;
     pose.tailLift = 0.6;
     pose.legAmp = 0.14;
-    pose.legPhase += 0.016 * TAU * 1.4;
+    // 用真实帧长累加，高刷屏（144Hz）下腿才不会被甩成 60Hz 的速度
+    this.legPhase += dt * TAU * 1.4;
+    pose.legPhase = this.legPhase;
   }
 
   private happyPose(pose: Pose): void {
@@ -413,13 +473,20 @@ export class Dog {
     pose.tailLift = 0.6;
   }
 
-  /** 追尾巴转圈：朝向快速翻面模拟原地打转（先慢→快→慢） */
+  /**
+   * 追尾巴转圈：一圈只翻两次面（1/3 处转过去、2/3 处转回来），配压低重心和猛摆尾。
+   *
+   * 早先是拿正弦每几帧翻一次，实测一秒能翻 9 次 —— 看着根本不是转圈，而是画面故障式左右闪，
+   * 这就是「狗隔一段时间疯狂左右变化」的来源。翻面次数由 test/dog.test.ts 钉住。
+   */
   private spinPose(_dt: number, pose: Pose): void {
     const t = 1 - clamp01(this.left / 2.2);
-    const speed = Math.sin(t * Math.PI); // 0→1→0，控制翻面频率
-    this.dir = Math.sin(this.clock * TAU * (0.8 + speed * 1.6)) > 0 ? 1 : -1;
-    pose.lean = 0.1;
-    pose.bob = Math.sin(this.clock * TAU * 6) * 3;
+    const seg = t < 1 / 3 ? 0 : t < 2 / 3 ? 1 : 2;
+    this.dir = seg % 2 === 0 ? this.spinBase : (-this.spinBase as 1 | -1);
+    const turn = Math.sin(t * Math.PI); // 中段最用力
+    pose.lean = 0.14 * turn;
+    pose.bob = turn * 4 + Math.sin(this.clock * TAU * 6) * 2 * turn;
+    pose.squash = turn * 0.4;
     pose.tailLift = 1;
     pose.tailSwing = Math.sin(this.clock * TAU * 8) * 1;
     pose.mouth = 0.6;
@@ -507,14 +574,23 @@ export class Dog {
    * 原地动作（伸懒腰/打滚/抓痒/追尾/哈欠/喘气）任何模式都能播。
    */
   private idleDecision(allowWalk: boolean): void {
+    // 搬运被打断（抚摸、中途开饭、随机小动作）后必须把剩下的路点搬完：
+    // 队列里还有没放的图标时优先回 carry，否则这批文件永远不会落位，
+    // 而主进程已经为它们记下了撤销记录。
+    if (this.carryQ.length > 0) {
+      this.enter("carry", 9999);
+      return;
+    }
     const roll = Math.random();
     if (allowWalk && roll < 0.25) this.enter("walk", 9999);
     else if (roll < 0.33) this.enter("pant", rand(1.6, 3));
     else if (roll < 0.47) this.enter("stretch", 2.0);
     else if (roll < 0.61) this.enter("roll", 2.5);
     else if (roll < 0.75) this.enter("scratch", 1.8);
-    else if (roll < 0.88) this.enter("spin", 2.2);
-    else this.enter("yawn", 1.6);
+    else if (roll < 0.88) {
+      this.spinBase = this.dir;
+      this.enter("spin", 2.2);
+    } else this.enter("yawn", 1.6);
   }
 
   private idlePose(pose: Pose): void {

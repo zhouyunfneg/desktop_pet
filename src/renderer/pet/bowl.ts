@@ -41,7 +41,7 @@ export function bowlBox(bowl: Bowl, padding = 6): Rect {
 export interface BowlLook {
   /** 盆里的粮粒数（= 待吃的文件数） */
   kibble: number;
-  /** 高亮：拖喂模式开着，或正有文件拖到盆上 */
+  /** 高亮：正有文件拖到盆上（要吃掉） */
   highlight: boolean;
 }
 

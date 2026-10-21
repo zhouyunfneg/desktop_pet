@@ -1,3 +1,39 @@
+/*
+ * Solid Glass 材质：加载顺序是主题 → 调色旋钮 → Tailwind 替身 → 本项目布局。
+ * 主题只画边缘（顶部一条光、四周一条发丝线、底下投影），填充色由 shim 提供；
+ * 下面 html/body 的 transparent 必须写在它们之后，把 shim 给 body 的实心背景顶掉，
+ * 否则透明狗窗会整块变成灰板。
+ */
+@import url("./glass/solid-glass.css");
+@import url("./glass/tint-presets.css");
+@import url("./glass/theme-shim.css");
+
+/* ---------- 本项目调色：把主题默认的冷灰往奶油上调 ---------- */
+/*
+ * 旋钮给的 tint 只改页面和玻璃的填充色，阴影、发丝线、次要文字这些「灰」在主题里
+ * 一律是偏蓝的 265 色相 —— 配奶油底会有点发冷。这里把这几个变量统一转到暖色相，
+ * 玻璃还是同一块玻璃（顶部一条光、四周一条线、底下投影都没动），只是光色从冷白
+ * 换成蜂蜜白，和柴犬的毛色对上。改这里不用动 glass/ 里的上游文件。
+ * 选择器必须写 :root —— 上游也用 :root，写成 html 权重更低会被它盖掉。
+ */
+:root {
+  --glass-edge: oklch(0.62 0.05 72 / 18%);
+  --glass-shade: oklch(0.45 0.07 62 / 24%);
+  --glass-contact: oklch(0.45 0.06 62 / 7%);
+  --glass-lift: oklch(0.45 0.06 62 / 12%);
+  --popover-edge: oklch(0.6 0.05 70 / 24%);
+  --popover-under: oklch(0.6 0.05 70 / 14%);
+  --muted-foreground: oklch(0.51 0.035 66);
+  --border: oklch(0.62 0.045 72 / 22%);
+  --secondary: oklch(0.66 0.05 75 / 12%);
+  --muted: oklch(0.66 0.05 75 / 9%);
+  --ring: oklch(0.76 0.13 78);
+  --focus-line: oklch(0.5 0.11 62 / 55%);
+  --well-shade: oklch(0.45 0.07 62 / 16%);
+  --destructive: oklch(0.56 0.19 26);
+  --success: oklch(0.56 0.12 132);
+}
+
 /* ---------- 狗窗 ---------- */
 /* 透明窗口：任何一处不透明都会变成灰块，所以 html/body 必须全程透明 */
 html,
@@ -22,13 +58,37 @@ body {
 }
 
 /* ---------- 设置窗 ---------- */
+/*
+ * 与狗窗那块玻璃统一：页面是奶油底 + 三盏暖光（theme-shim 给 body 的 --light-*），
+ * 卡片是半透的薄玻璃，控件是一小片清玻璃。这里只写排版和材质，
+ * 具体颜色全部走主题变量，改配色只改上面「本项目调色」那一块。
+ */
 body.view-settings {
-  background: #f6f4f0;
-  color: #2f2a26;
+  background-color: var(--background);
+  color: var(--foreground);
   overflow: auto;
   user-select: text;
   -webkit-user-select: text;
-  font: 13px/1.6 "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  font: 13px/1.65 "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+}
+
+body.view-settings::-webkit-scrollbar {
+  width: 10px;
+}
+
+body.view-settings::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+body.view-settings::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-color: var(--glass-edge);
+  background-clip: padding-box;
+}
+
+body.view-settings::-webkit-scrollbar-thumb:hover {
+  background-color: var(--well-shade);
 }
 
 body.view-settings #stage {
@@ -43,23 +103,64 @@ body:not(.view-settings) #settings-root {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px 16px 48px;
+  padding: 16px 18px 52px;
+}
+
+.page-head {
+  padding: 0 2px;
+}
+
+.page-head h1 {
+  margin: 0;
+  font-size: 16.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.page-head p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
 }
 
 .card {
-  background: #fff;
-  border: 1px solid #e3ddd3;
-  border-radius: 10px;
-  padding: 12px 14px;
-  box-shadow: 0 1px 2px rgba(60, 50, 40, 0.05);
+  padding: 13px 15px 14px;
+  border: 0;
+  border-radius: calc(var(--radius) + 4px);
+  background-color: var(--card);
+  color: var(--card-foreground);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow:
+    inset 0 1px 0 var(--glass-rim),
+    inset 0 0 0 1px var(--glass-inner),
+    0 0 0 1px var(--glass-edge),
+    0 1px 2px var(--glass-contact),
+    0 14px 30px -18px var(--glass-shade);
 }
 
 .card h2 {
-  margin: 0 0 8px;
-  font-size: 13px;
-  letter-spacing: 0.04em;
-  color: #8a7f74;
-  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 9px;
+  font-size: 12.5px;
+  letter-spacing: 0.06em;
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+/* 每张卡片左边一枚蜂蜜色小竖条：界面里唯一常驻的强调色之一 */
+.card h2::before {
+  content: "";
+  width: 4px;
+  height: 13px;
+  flex: none;
+  border-radius: 999px;
+  background-color: var(--primary);
+  box-shadow:
+    inset 0 -1px 0 var(--primary-under),
+    0 0 7px color-mix(in oklab, var(--primary) 45%, transparent);
 }
 
 .card p {
@@ -67,12 +168,13 @@ body:not(.view-settings) #settings-root {
 }
 
 .muted {
-  color: #8a7f74;
+  color: var(--muted-foreground);
 }
 
 .hint {
-  color: #9a9188;
+  color: var(--muted-foreground);
   font-size: 12px;
+  opacity: 0.92;
 }
 
 .row {
@@ -80,53 +182,102 @@ body:not(.view-settings) #settings-root {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin-top: 8px;
+  margin-top: 9px;
 }
 
 .row.inline {
   margin-top: 0;
+  gap: 9px;
+}
+
+.row.inline > span {
+  color: var(--muted-foreground);
 }
 
 .path {
   flex: 1;
   min-width: 160px;
-  padding: 3px 6px;
-  border-radius: 5px;
-  background: #f4f1ec;
-  border: 1px solid #e3ddd3;
+  padding: 4px 8px;
+  border-radius: var(--radius-control);
+  background-color: var(--field);
+  box-shadow:
+    inset 0 1px 0 var(--field-rim),
+    0 0 0 1px var(--field-edge);
   font: 12px/1.5 Consolas, monospace;
+  color: var(--muted-foreground);
   word-break: break-all;
 }
 
 button {
   font: inherit;
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid #cfc7ba;
-  background: #fbfaf8;
-  color: #3a342e;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background-color: var(--glass-control);
+  color: var(--foreground);
   cursor: pointer;
+  -webkit-backdrop-filter: var(--glass-blur-control);
+  backdrop-filter: var(--glass-blur-control);
+  box-shadow:
+    inset 0 1px 0 var(--glass-control-rim),
+    0 0 0 1px var(--glass-edge),
+    0 1px 2px var(--glass-contact);
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
 }
 
-button:hover {
-  background: #f1ede6;
+button:hover:not(:disabled) {
+  background-color: var(--field);
+}
+
+/* 按下去就坐回页面上：底下那道投影收掉 */
+button:active:not(:disabled) {
+  background-color: var(--glass-state);
+  box-shadow:
+    inset 0 1px 0 var(--glass-state-rim),
+    0 0 0 1px var(--glass-state-edge),
+    0 1px 1px var(--glass-contact);
+}
+
+button:disabled {
+  color: var(--muted-foreground);
+  opacity: 0.55;
+  cursor: default;
+}
+
+button.primary {
+  background-color: color-mix(in oklab, var(--primary) var(--primary-solid), transparent);
+  color: var(--primary-foreground);
+  font-weight: 600;
+  box-shadow:
+    inset 0 1px 0 var(--primary-rim),
+    inset 0 -1px 0 var(--primary-under),
+    0 0 0 1px var(--primary-edge),
+    0 7px 15px -9px var(--glass-shade);
+}
+
+button.primary:hover:not(:disabled) {
+  background-color: color-mix(in oklab, var(--primary) calc(var(--primary-solid) - 10%), transparent);
 }
 
 button.ghost {
-  background: transparent;
-  border-color: #ded7cc;
+  background-color: transparent;
+  box-shadow:
+    inset 0 1px 0 var(--glass-control-rim),
+    0 0 0 1px var(--glass-edge);
 }
 
 button.danger {
-  color: #a4453a;
-  border-color: #e3c4bf;
+  color: var(--destructive);
 }
 
 button.mini {
   padding: 0 7px;
   line-height: 20px;
-  border-radius: 5px;
-  color: #8a7f74;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--muted-foreground);
 }
 
 table.grid {
@@ -137,15 +288,20 @@ table.grid {
 
 table.grid th {
   text-align: left;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 11px;
-  color: #9a9188;
-  padding: 2px 4px;
+  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+  padding: 3px 5px;
 }
 
 table.grid td {
-  padding: 2px;
-  border-top: 1px solid #f0ece5;
+  padding: 3px;
+  border-top: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
+}
+
+table.grid tr:hover td {
+  background-color: var(--hover-faint);
 }
 
 table.grid td.num,
@@ -155,13 +311,14 @@ table.grid th.num {
 }
 
 table.grid tr.selected td {
-  background: #f7f3ea;
+  background-color: color-mix(in oklab, var(--primary) 13%, transparent);
+  box-shadow: inset 2px 0 0 var(--primary);
 }
 
 td.empty {
   text-align: center;
-  color: #9a9188;
-  padding: 12px 0 !important;
+  color: var(--muted-foreground);
+  padding: 14px 0 !important;
 }
 
 input,
@@ -169,17 +326,33 @@ select {
   font: inherit;
   width: 100%;
   box-sizing: border-box;
-  padding: 3px 6px;
-  border-radius: 5px;
-  border: 1px solid #ded7cc;
-  background: #fff;
-  color: inherit;
+  padding: 4px 9px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background-color: var(--field);
+  color: var(--foreground);
+  -webkit-backdrop-filter: var(--glass-blur-control);
+  backdrop-filter: var(--glass-blur-control);
+  box-shadow:
+    inset 0 1px 0 var(--field-rim),
+    0 0 0 1px var(--field-edge);
+  transition: box-shadow 0.12s ease;
+}
+
+select {
+  /* 原生小三角在奶油底上偏冷，换成自己画的暖灰箭头（内联，不联网） */
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 24px;
+  background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7'%3E%3Cpath d='M1 1.5 5 5.5 9 1.5' fill='none' stroke='%237d7266' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
 }
 
 input:focus,
 select:focus,
 button:focus-visible {
-  outline: 2px solid #b7d3c2;
+  outline: 2px solid var(--ring);
   outline-offset: 1px;
 }
 
@@ -187,16 +360,101 @@ table.grid input.num {
   text-align: right;
 }
 
+/* 勾选项：不用系统那个蓝勾，画成同材质的小方块 + 一划蜂蜜底上的深勾 */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 17px;
+  height: 17px;
+  flex: none;
+  padding: 0;
+  border-radius: 6px;
+  background-color: var(--field);
+  box-shadow:
+    inset 0 1px 0 var(--field-rim),
+    0 0 0 1px var(--field-edge),
+    0 1px 2px var(--glass-contact);
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+}
+
+input[type="checkbox"]:checked {
+  background-color: color-mix(in oklab, var(--primary) var(--primary-solid), transparent);
+  box-shadow:
+    inset 0 1px 0 var(--primary-rim),
+    inset 0 -1px 0 var(--primary-under),
+    0 0 0 1px var(--primary-edge);
+}
+
+input[type="checkbox"]:checked::after {
+  content: "";
+  width: 9px;
+  height: 5px;
+  border: 2px solid var(--primary-foreground);
+  border-top: 0;
+  border-right: 0;
+  border-radius: 1px;
+  transform: translateY(-1px) rotate(-45deg);
+}
+
 table.grid input[type="checkbox"] {
-  width: auto;
   margin: 0 auto;
-  display: block;
-  accent-color: #62a878;
 }
 
 .row input[type="checkbox"] {
+  width: 17px;
+}
+
+/* 滑杆：一道凹槽 + 一枚最亮的玻璃钮，进度用强调色填 */
+input[type="range"] {
+  appearance: none;
+  -webkit-appearance: none;
   width: auto;
-  accent-color: #62a878;
+  flex: 1;
+  min-width: 120px;
+  max-width: 220px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background-color: var(--well-shade);
+  background-image: linear-gradient(
+    to right,
+    var(--primary) 0 var(--fill, 50%),
+    transparent var(--fill, 50%) 100%
+  );
+  box-shadow:
+    inset 0 1px 2px var(--well-shade),
+    inset 0 0 0 1px color-mix(in oklab, var(--border) 60%, transparent);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background-color: var(--knob);
+  box-shadow:
+    0 0 0 1px var(--glass-edge),
+    0 2px 6px -1px var(--glass-shade);
+}
+
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 2px var(--ring),
+    0 2px 6px -1px var(--glass-shade);
 }
 
 .cell {
@@ -209,16 +467,20 @@ table.grid input[type="checkbox"] {
   width: 12px;
   height: 12px;
   flex: none;
-  border-radius: 3px;
+  border-radius: 4px;
   border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 canvas.map {
   display: block;
   width: 100%;
   height: 210px;
-  border-radius: 8px;
-  background: #f2efe9;
+  border-radius: calc(var(--radius) + 2px);
+  background-color: var(--panel);
+  box-shadow:
+    inset 0 1px 0 var(--glass-rim),
+    0 0 0 1px var(--glass-edge);
   touch-action: none;
 }
 
@@ -227,18 +489,393 @@ canvas.map {
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 5px 16px;
+  padding: 6px 18px;
   font-size: 12px;
-  color: #8a7f74;
-  background: #efece6;
-  border-top: 1px solid #e3ddd3;
+  color: var(--muted-foreground);
+  background-color: var(--card);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow:
+    inset 0 1px 0 var(--glass-rim),
+    0 -10px 22px -16px var(--glass-shade);
+}
+
+/* 状态条前面一枚小灯：颜色跟着文案的语义走（读取中/已保存/出错） */
+.status::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background-color: currentColor;
+  opacity: 0.75;
 }
 
 .status.ok {
-  color: #3f7a55;
+  color: var(--success);
 }
 
 .status.err {
-  color: #a4453a;
-  background: #f7e9e6;
+  color: var(--destructive);
+  background-color: color-mix(in oklab, var(--destructive) 8%, var(--card));
+}
+
+/* ---------- 右键菜单（自绘玻璃面板） ---------- */
+/*
+ * 材质规矩来自 Solid Glass：质感只加在边缘，面板面上不铺渐变、hover 也不换色相，
+ * 颜色只出现在「勾上的那一格」和「退出」这类状态上。
+ * 菜单项结构与类名见 src/renderer/pet/menu.ts。
+ */
+.pm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.pm-pane {
+  position: absolute;
+  width: 252px;
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  padding: 10px 9px 9px !important;
+  border-radius: calc(var(--radius) + 6px) !important;
+  /* 面板是菜单里最厚的一层玻璃：填充、边缘高光、投影都由主题给 */
+  background-color: var(--popover);
+  color: var(--popover-foreground);
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0;
+  transform: scale(0.94) translateY(-3px);
+  transform-origin: top left;
+  transition:
+    opacity 0.14s ease-out,
+    transform 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.pm-open .pm-pane {
+  opacity: 1;
+  transform: none;
+}
+
+/*
+ * 玻璃后面得垫点东西：狗窗是透明窗，面板背后没有页面内容可糊，
+ * backdrop-filter 会糊不到东西而只剩半透明灰。这一层用主题自带的三盏光补上，
+ * 再压一盏强调色，于是奶油玻璃里透出一点蜂蜜暖光 —— 和柴犬的毛色同源。
+ * inset 必须是 0 而不是负值：绝对定位的子元素外扩会被面板的 overflow 算进滚动区域，
+ * 菜单四周立刻冒出两条用不了的滚动条。
+ */
+.pm-pane::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image:
+    radial-gradient(58% 42% at 16% 2%, var(--light-1), transparent 70%),
+    radial-gradient(52% 44% at 94% 20%, var(--light-2), transparent 72%),
+    radial-gradient(66% 52% at 52% 104%, var(--light-3), transparent 70%),
+    radial-gradient(46% 34% at 84% 96%, color-mix(in oklab, var(--primary) 30%, transparent), transparent 74%);
+  filter: blur(9px) saturate(1.2) brightness(1.06);
+}
+
+.pm-pane::-webkit-scrollbar {
+  width: 8px;
+}
+
+.pm-pane::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-color: var(--glass-edge);
+  background-clip: padding-box;
+}
+
+.pm-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 1px 5px 0;
+}
+
+.pm-mug {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  background-color: var(--glass-control);
+  box-shadow:
+    inset 0 1px 0 var(--glass-control-rim),
+    0 0 0 1px var(--glass-edge),
+    0 0 0 4px color-mix(in oklab, var(--primary) 18%, transparent);
+}
+
+.pm-headtext {
+  min-width: 0;
+}
+
+.pm-name {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.pm-sub {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pm-rule {
+  height: 1px;
+  border: 0;
+  margin: 9px 0 0;
+  background: linear-gradient(
+    to right,
+    color-mix(in oklab, var(--primary) 30%, var(--border)),
+    var(--border) 42%,
+    transparent
+  );
+}
+
+.pm-group {
+  padding-top: 2px;
+}
+
+/* 组与组之间一道渐隐的分隔线，比单纯留白更好找 */
+.pm-group + .pm-group {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid color-mix(in oklab, var(--border) 45%, transparent);
+}
+
+.pm-grouptitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 5px 0 3px;
+  padding: 0 6px;
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  color: var(--muted-foreground);
+}
+
+/* 组名前面一枚小点：整块菜单里只有它是强调色 */
+.pm-grouptitle::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  flex: none;
+  border-radius: 50%;
+  background-color: var(--primary);
+  opacity: 0.65;
+}
+
+.pm-item[data-slot="button"] {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 6px 8px;
+  margin: 1px 0;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius) * 0.65);
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+/* 悬停、按下、展开中戴的都是同一小块清玻璃，不换色相 */
+.pm-item[data-slot="button"]:hover:not(:disabled),
+.pm-item[data-slot="button"]:active:not(:disabled) {
+  background-color: var(--glass-control);
+  border-color: var(--glass-control-rim);
+}
+
+.pm-item[data-slot="button"]:active:not(:disabled) {
+  background-color: var(--glass-state);
+}
+
+.pm-item[data-slot="button"]:disabled {
+  color: var(--muted-foreground);
+  opacity: 0.6;
+  cursor: default;
+}
+
+.pm-ico {
+  /* 每项左边垫一小片圆玻璃承载图标：菜单里所有「状态」共用同一种材质 */
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 50%;
+  background-color: var(--glass-control);
+  border: 1px solid var(--glass-control-rim);
+  box-shadow: 0 1px 2px var(--glass-contact);
+  font-size: 12.5px;
+  line-height: 1;
+}
+
+.pm-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pm-hint {
+  flex: none;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.pm-box {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: transparent;
+  transition: background-color 0.12s ease;
+}
+
+.pm-box[data-on] {
+  background-color: color-mix(in oklab, var(--primary) var(--primary-solid), transparent);
+  border-color: var(--primary-edge);
+  color: var(--primary-foreground);
+  box-shadow:
+    inset 0 1px 0 var(--primary-rim),
+    inset 0 -1px 0 var(--primary-under);
+}
+
+/* 「退出」是菜单里唯一的危险项：只用文字着色，不铺底色，避免看着像误触就会按的东西 */
+.pm-danger .pm-label {
+  color: color-mix(in oklab, var(--destructive) 82%, var(--popover-foreground));
+}
+
+.pm-danger:hover:not(:disabled) .pm-label {
+  color: var(--destructive);
+}
+
+/*
+ * 收纳确认面板（结构见 src/renderer/pet/fold-panel.ts）。
+ * 外壳沿用菜单那块玻璃，只加清单自己的排版；
+ * 颜色只出现在「一个地方」：实心按钮 = 开始动手，分类色点 = 这是什么类型，
+ * 其余全是同一块玻璃，避免又变成一份彩色清单。
+ */
+.pf-pane {
+  width: 286px;
+}
+
+.pf-group {
+  padding: 5px 6px 6px;
+  border-radius: var(--radius-control);
+}
+
+.pf-group + .pf-group {
+  margin-top: 3px;
+  background-color: color-mix(in oklab, var(--secondary) 42%, transparent);
+}
+
+.pf-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.pf-title i {
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28) inset;
+}
+
+.pf-count {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+
+.pf-tag {
+  font-style: normal;
+  font-size: 10px;
+  padding: 0 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+}
+
+.pf-file {
+  margin: 2px 0 0 14px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pf-more {
+  color: var(--primary);
+}
+
+.pf-foot {
+  margin: 8px 6px 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
+.pf-btns {
+  display: flex;
+  gap: 7px;
+  padding: 2px 6px 2px;
+}
+
+/* 「开始动手」那颗是主题的实心玻璃按钮（元素上带 .bg-primary.glass-primary），
+   这里只管尺寸，不覆盖它的材质；另一颗是普通清玻璃。 */
+.pf-btns button {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 7px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.pf-ok {
+  flex: 1 1 auto;
+  font-weight: 600;
+}
+
+.pf-no {
+  flex: 0 0 auto;
+  background-color: var(--glass-control);
+  color: var(--popover-foreground);
+  box-shadow:
+    inset 0 1px 0 var(--glass-control-rim),
+    0 0 0 1px var(--glass-edge),
+    0 1px 2px var(--glass-contact);
+}
+
+.pf-no:hover {
+  background-color: var(--field);
 }

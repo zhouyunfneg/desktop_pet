@@ -1,10 +1,11 @@
 import { app, ipcMain, screen } from "electron";
 import { defaultZones, validateConfig, type AppConfig, type Rect } from "../shared/config";
+import { normalizeSettings } from "../shared/normalize";
 import { IPC, type Settings, type UiState } from "../shared/ipc";
 import { hasUndo } from "./organize";
 import { refreshOverlay } from "./overlay-window";
 import { pushState } from "./ipc";
-import { applyTopmost, getFeedingSecondsLeft, setFeedingMode } from "./pet-window";
+import { applyTopmost } from "./pet-window";
 import { configStore, settingsStore } from "./store";
 
 /**
@@ -24,13 +25,15 @@ export function uiState(): UiState {
     config: { ...configStore.get() },
     workArea: workArea(),
     desktopDir: app.getPath("desktop"),
-    feedingSecondsLeft: getFeedingSecondsLeft(),
     canUndo: hasUndo()
   };
 }
 
 export function patchSettings(patch: Partial<Settings>): UiState {
   settingsStore.set(patch);
+  // IPC 与菜单都是信任边界：越界值当场按存档规则洗一遍，
+  // 否则非法的 keepDistance / roamMode 会先被广播给渲染层，等下次启动才被洗掉
+  settingsStore.replace(normalizeSettings(settingsStore.get()));
   const next = settingsStore.get();
 
   if (patch.topmost !== undefined) applyTopmost(next.topmost);
@@ -70,5 +73,4 @@ export function registerStateIpc(): void {
   ipcMain.handle(IPC.patchSettings, (_e, patch: Partial<Settings>) => patchSettings(patch));
   ipcMain.handle(IPC.saveConfig, (_e, config: AppConfig) => saveConfig(config));
   ipcMain.handle(IPC.seedZones, () => seedZones());
-  ipcMain.handle(IPC.setFeedingMode, (_e, seconds: number) => setFeedingMode(Number(seconds) || 0));
 }

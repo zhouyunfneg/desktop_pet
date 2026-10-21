@@ -1,6 +1,6 @@
 import { app, BrowserWindow, screen } from "electron";
 import { URLSearchParams } from "node:url";
-import type { Rect } from "../shared/ipc";
+import { IPC, type Rect } from "../shared/ipc";
 import { PRELOAD_PATH, RENDERER_INDEX } from "./paths";
 import { settingsStore } from "./store";
 
@@ -11,20 +11,23 @@ import { settingsStore } from "./store";
  * 关键约束：全屏透明窗一旦取消穿透，整个桌面的点击都会被它吞掉。
  * 所以不用 setIgnoreMouseEvents，改用 setShape —— 命中区域只等于「狗 + 食盆 + 气泡」，
  * 区域之外对系统的命中测试根本不存在，点击自然落到下面的窗口。
- * 附带好处：食盆一直在命中区里，资源管理器直接拖文件到碗上就能投喂，不再需要「拖喂模式」。
+ * 附带好处：食盆一直在命中区里，资源管理器直接拖文件到碗上就能投喂，不需要额外开关。
  */
 
 let win: BrowserWindow | null = null;
 /** 渲染层上报的命中矩形（画布坐标 = 工作区相对坐标） */
 let hotRects: Rect[] = [];
-/** 拖喂模式截止时间戳；期间命中区放大到整块画布 */
-let feedingUntil = 0;
-let feedingTimer: NodeJS.Timeout | null = null;
 let cursorTimer: NodeJS.Timeout | null = null;
 let lastCursor = { x: 0, y: 0 };
 let shapeSig = "";
 /** 首次显示门控：等渲染层报上第一次命中区（狗已画好）再 show，避免开场白边闪一下 */
 let revealed = false;
+/**
+ * 菜单开着：命中区必须一直保持整块画布。
+ * 渲染层的帧循环每帧都会重报「狗 + 碗 + 气泡」那一小块，不拦下来的话
+ * SetWindowRgn 会把玻璃菜单面板一起裁掉，看起来就是菜单根本没弹出来。
+ */
+let menuHeld = false;
 
 const CURSOR_HZ = 40;
 
@@ -42,10 +45,7 @@ function origin(): { x: number; y: number } {
 function applyShape(): void {
   if (!win || win.isDestroyed()) return;
   const wa = workArea();
-  const rects =
-    getFeedingSecondsLeft() > 0
-      ? [{ x: 0, y: 0, w: wa.w, h: wa.h }]
-      : hotRects.filter((r) => r.w > 0 && r.h > 0);
+  const rects = hotRects.filter((r) => r.w > 0 && r.h > 0);
 
   const sig = JSON.stringify(rects);
   if (sig === shapeSig) return;
@@ -65,26 +65,33 @@ function applyShape(): void {
 /** 渲染层算好「狗 + 碗 + 气泡」的外接框后报上来 */
 export function setHotRegion(rects: Rect[]): void {
   hotRects = Array.isArray(rects) ? rects.slice(0, 8) : [];
-  applyShape();
+  if (!menuHeld) applyShape();
   reveal();
 }
 
 /** 菜单弹出时，临时把命中区放大到整块画布，让点击其他地方时菜单能正常关闭 */
 export function onMenuOpen(): void {
   if (!win || win.isDestroyed()) return;
+  menuHeld = true;
   const wa = workArea();
   win.setShape([{ x: 0, y: 0, width: wa.w, height: wa.h }]);
 }
 
 /** 菜单关闭后，恢复命中区 */
 export function onMenuClose(): void {
+  menuHeld = false;
   shapeSig = "";
   applyShape();
 }
 
-/** 只在第一次命中区上报后显示窗口（此时区域已贴合狗，不会露出未绘制的白边） */
+/**
+ * 只在第一次命中区上报后显示窗口（此时区域已贴合狗，不会露出未绘制的白边）。
+ * 兜底路径也必须先设命中区：透明窗在没调用过 setShape 之前是整块可点的，
+ * 直接 show 会把整个桌面的点击都吞掉，用户表现为「桌面点不动了」。
+ */
 function reveal(): void {
   if (revealed || !win || win.isDestroyed()) return;
+  if (hotRects.length === 0) applyShape();
   revealed = true;
   win.show();
 }
@@ -98,7 +105,7 @@ function startCursorPolling(): void {
     if (p.x === lastCursor.x && p.y === lastCursor.y) return;
     lastCursor = p;
     const o = origin();
-    win.webContents.send("pet:cursor", p.x - o.x, p.y - o.y);
+    win.webContents.send(IPC.cursor, p.x - o.x, p.y - o.y);
   }, 1000 / CURSOR_HZ);
 }
 
@@ -181,39 +188,6 @@ export function getPetWindow(): BrowserWindow | null {
   return win;
 }
 
-export function isFeedingMode(): boolean {
-  return Date.now() < feedingUntil;
-}
-
-export function getFeedingSecondsLeft(): number {
-  return Math.max(0, Math.ceil((feedingUntil - Date.now()) / 1000));
-}
-
-/** 用回调上报而不是 import ipc 模块：ipc.ts 已经依赖本模块，反向引用会成环 */
-let feedingListener: ((secondsLeft: number) => void) | null = null;
-export function onFeedingMode(listener: (secondsLeft: number) => void): void {
-  feedingListener = listener;
-}
-
-/**
- * 命中区已经让碗随时可投放，所以这个开关只用于「整块画布临时都可点/可投」，
- * 比如想把文件直接丢到狗头上。
- */
-export function setFeedingMode(seconds: number): number {
-  feedingUntil = seconds > 0 ? Date.now() + seconds * 1000 : 0;
-  if (feedingTimer) {
-    clearTimeout(feedingTimer);
-    feedingTimer = null;
-  }
-  if (seconds > 0) {
-    feedingTimer = setTimeout(() => setFeedingMode(0), seconds * 1000);
-  }
-  applyShape();
-  const left = getFeedingSecondsLeft();
-  feedingListener?.(left);
-  return left;
-}
-
 export function applyTopmost(topmost: boolean): void {
   if (!win || win.isDestroyed()) return;
   // 'floating' 层级：盖在普通窗口之上，但不遮挡全屏播放
@@ -234,5 +208,5 @@ export function toggleVisible(): boolean {
 /** 把狗叫回食盆旁：位置是渲染层状态，只能发消息过去 */
 export function recallDog(): void {
   if (!win || win.isDestroyed()) return;
-  win.webContents.send("pet:recall");
+  win.webContents.send(IPC.recall);
 }

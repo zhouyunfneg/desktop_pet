@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="zh-CN" class="dark sg-tint-mauve sg-thick-default sg-rim-default sg-shadow-default sg-accent-violet">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>桌面整理：四种排法对照（用你桌面的真实图标）</title>
+<link rel="stylesheet" href="../src/renderer/glass/solid-glass.css" />
+<link rel="stylesheet" href="../src/renderer/glass/tint-presets.css" />
+<link rel="stylesheet" href="../src/renderer/glass/theme-shim.css" />
+<style>
+  /* 布局自己写：主题只画材质，不负责排版 */
+  body {
+    margin: 0; padding: 26px 26px 60px;
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    color: var(--foreground); background-color: var(--background);
+    background-image:
+      radial-gradient(52rem 30rem at 12% -6%, var(--light-1), transparent 70%),
+      radial-gradient(46rem 30rem at 92% 8%, var(--light-2), transparent 72%),
+      radial-gradient(60rem 34rem at 60% 108%, var(--light-3), transparent 70%);
+    background-attachment: fixed;
+  }
+  .wrap { max-width: 1560px; margin: 0 auto; }
+  h1 { font-size: 21px; margin: 0 0 6px; letter-spacing: .01em; }
+  .lede { font-size: 14px; line-height: 1.65; color: var(--muted-foreground); margin: 0 0 20px; }
+  .lede b { color: var(--foreground); font-weight: 600; }
+  .modes { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 18px; }
+  .modes [data-slot="button"] {
+    font: inherit; font-size: 13px; padding: 8px 13px; cursor: pointer;
+    border: 1px solid var(--border); color: var(--foreground);
+    background: var(--secondary); border-radius: var(--radius-control);
+  }
+  .modes [data-slot="button"][data-active="true"] {
+    background: var(--primary); color: var(--primary-foreground); border-color: transparent; font-weight: 600;
+  }
+  .panes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 1080px) { .panes { grid-template-columns: 1fr; } }
+  section.bg-card { padding: 14px 16px 16px; }
+  .cap { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; }
+  .cap h2 { font-size: 14px; margin: 0; font-weight: 600; }
+  .cap span { font-size: 12px; color: var(--muted-foreground); }
+  .desk {
+    position: relative; width: 100%; aspect-ratio: 1920 / 1010;
+    border-radius: var(--radius-control); overflow: hidden;
+    background: linear-gradient(160deg, #2b3346, #1d2331 60%, #242b3c);
+    border: 1px solid var(--border);
+  }
+  .cell { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .glyph {
+    width: 62%; aspect-ratio: 1; border-radius: 5px; display: grid; place-items: center;
+    font-size: 11px; color: #0e1219; font-weight: 700;
+    box-shadow: 0 2px 6px rgba(0,0,0,.35);
+  }
+  .label {
+    /* 名字比格子宽：让它向两边借一点空间、最多两行，超出才省略，否则中文名全被截成一个字 */
+    position: relative; width: 170%;
+    font-size: 8.5px; line-height: 1.15; text-align: center;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; word-break: break-all;
+    color: #dbe3f0; text-shadow: 0 1px 2px rgba(0,0,0,.85); }
+  .seq { position: absolute; top: -2px; left: -2px; font-size: 8px; padding: 0 3px; border-radius: 4px;
+    background: rgba(0,0,0,.55); color: #fff; }
+  .band { position: absolute; pointer-events: none; border-radius: 6px;
+    border: 1px dashed rgba(255,255,255,.22); }
+  .band b { position: absolute; top: -1px; left: 4px; font-size: 8.5px; font-weight: 600;
+    padding: 1px 4px; border-radius: 0 0 4px 0; color: #10151f; }
+  .note { font-size: 12.5px; line-height: 1.7; color: var(--muted-foreground); margin: 12px 0 0; }
+  .note b { color: var(--foreground); }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 14px 0 0; }
+  th, td { text-align: left; padding: 8px 9px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 11.5px; color: var(--muted-foreground); font-weight: 600; }
+  td.pick { color: var(--primary); font-weight: 600; white-space: nowrap; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11.5px; color: var(--muted-foreground); margin: 0 0 14px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>桌面整理：四种排法对照</h1>
+  <p class="lede">
+    两张图用的是<b>你桌面上现在真实存在的 24 个图标</b>（实测坐标读出来的，不是假数据）。
+    左边的「乱」就是现状，右边是每种排法算完之后的样子。数字角标是小狗去衔的先后顺序。
+  </p>
+  <div class="legend" id="legend"></div>
+  <div class="modes" id="modes"></div>
+  <div class="panes">
+    <section class="bg-card rounded-lg">
+      <div class="cap"><h2>现状</h2><span id="nowStat"></span></div>
+      <div class="desk" id="now"></div>
+      <p class="note">快捷方式占满最左一列，11 个客户文件夹横铺第一行，散文件孤零零跑到右上角。</p>
+    </section>
+    <section class="bg-card rounded-lg">
+      <div class="cap"><h2 id="modeName">—</h2><span id="afterStat"></span></div>
+      <div class="desk" id="after"></div>
+      <p class="note" id="modeNote">—</p>
+    </section>
+  </div>
+  <section class="bg-card rounded-lg" style="margin-top:16px">
+    <div class="cap"><h2>选哪种：区别与代价</h2><span>只推荐一个</span></div>
+    <table>
+      <thead><tr><th>选项</th><th>一句话区别</th><th>代价</th><th>推荐</th></tr></thead>
+      <tbody>
+        <tr><td>A 自动分栏</td><td>不用你画区域，程序按类型自己留出竖栏，同类排一起、栏头有标签</td><td>只挪图标位置，文件不动；约 24 个图标 30~60 秒衔完；能肉眼验收</td><td class="pick">✔ 推荐</td></tr>
+        <tr><td>B 一行行铺齐</td><td>不分栏，只按「文件夹→快捷方式→文档→图片」顺序从左上铺满</td><td>最省事，但同类只是排在一起、看不出边界，桌面大了还是一团</td><td></td></tr>
+        <tr><td>C 收进文件夹</td><td>桌面上真的建「文档/图片/其他」文件夹，把散文件移进去</td><td>最干净，但<strong>动的是文件系统</strong>，撤销要把文件搬回来；有权限和被占用风险</td><td></td></tr>
+        <tr><td>D 常用靠左、临时靠右</td><td>按最近有没有打开过分「常用」和「临时」，临时的一律收到右边一栏</td><td>最贴近使用习惯，但依赖文件「上次访问时间」，这台机器上这个数据可能不准（不确定）</td><td></td></tr>
+      </tbody>
+    </table>
+    <p class="note">
+      <b>推荐 A</b>：它把你现在这套「先画区域再整理」的配置负担直接拿掉（区域由程序算），
+      而小狗一个个衔过去的动画、撤销、崩溃找回都能原样复用；风险和不闪屏这套已经验证过了。
+      C 可以留成 A 之外的第二个开关（想让桌面彻底干净时再点），但它得单独确认才做。
+    </p>
+  </section>
+</div>
+<script>
+// 真实读取结果（1920×1040 / 100% 缩放 / 自动排列已关闭；格距 76×101，原点 14,2）
+const OX = 14, OY = 2, CW = 76, CH = 101, W = 1920, H = 1010;
+const KIND = {
+  sys:    { label: "系统项",   color: "#6B7B8C", order: 0 },
+  lnk:    { label: "快捷方式", color: "#8C8FA8", order: 1 },
+  dir:    { label: "文件夹",   color: "#E0A23B", order: 2 },
+  doc:    { label: "文档",     color: "#4C86E0", order: 3 },
+  img:    { label: "图片",     color: "#3BA776", order: 4 },
+  other:  { label: "其他",     color: "#9AA0A6", order: 5 }
+};
+const ICON = { sys: "🖥", lnk: "↗", dir: "🗀", doc: "≡", img: "▣", other: "•" };
+const ITEMS = [
+  { name: "此电脑", kind: "sys", x: 14, y: 103 },
+  { name: "回收站", kind: "sys", x: 14, y: 709 },
+  { name: "夸克", kind: "lnk", x: 14, y: 305 },
+  { name: "微信", kind: "lnk", x: 14, y: 406 },
+  { name: "aseprite", kind: "lnk", x: 14, y: 507 },
+  { name: "企业微信", kind: "lnk", x: 14, y: 608 },
+  { name: "PyCharm 2025", kind: "lnk", x: 14, y: 810 },
+  { name: "微信开发者工具", kind: "lnk", x: 14, y: 911 },
+  { name: "Qoder", kind: "lnk", x: 90, y: 2 },
+  { name: "Qoder IDE", kind: "lnk", x: 166, y: 2 },
+  { name: "金鹏", kind: "dir", x: 242, y: 2 },
+  { name: "亿海", kind: "dir", x: 318, y: 2 },
+  { name: "隆耐", kind: "dir", x: 394, y: 2 },
+  { name: "聪旺", kind: "dir", x: 470, y: 2 },
+  { name: "西牛", kind: "dir", x: 546, y: 2 },
+  { name: "纽富瑞,纽易特", kind: "dir", x: 622, y: 2 },
+  { name: "新瑞克", kind: "dir", x: 850, y: 2 },
+  { name: "废案", kind: "dir", x: 926, y: 2 },
+  { name: "杂物", kind: "dir", x: 1002, y: 2 },
+  { name: "10、审计报告", kind: "dir", x: 1078, y: 2 },
+  { name: "合同模版", kind: "dir", x: 1078, y: 103 },
+  { name: "新建文本文档 (2).txt", kind: "doc", x: 1762, y: 103 },
+  { name: "AI数据确权.pdf", kind: "doc", x: 1838, y: 103 },
+  { name: "新建位图图像.bmp", kind: "img", x: 1610, y: 103 }
+];
+
+/** 把图标放进某个格点 */
+const slotAt = (col, row) => ({ x: OX + col * CW, y: OY + row * CH });
+const rowsMax = Math.floor((H - OY - CH) / CH) + 1;
+
+// —— 方案 A：自动分栏（系统项留在第一列原位，其余按类型各占一竖栏，栏宽 2 列）——
+function planA(items) {
+  const movable = items.filter((i) => i.kind !== "sys");
+  const byKind = Object.keys(KIND).filter((k) => k !== "sys")
+    .map((k) => ({ k, list: movable.filter((i) => i.kind === k) }))
+    .filter((g) => g.list.length > 0);
+  const out = items.filter((i) => i.kind === "sys").map((i) => ({ ...i }));
+  const bands = [];
+  let col = 1;
+  let seq = 0;
+  for (const g of byKind) {
+    const n = g.list.length;
+    const rows = Math.min(rowsMax, n);
+    const cols = Math.max(1, Math.ceil(n / rows));
+    bands.push({ kind: g.k, col, cols, rows: Math.ceil(n / cols) });
+    g.list.sort((a, b) => a.name.localeCompare(b.name, "zh-Hans-CN")).forEach((i, idx) => {
+      const p = slotAt(col + (idx % cols), Math.floor(idx / cols));
+      out.push({ ...i, x: p.x, y: p.y, seq: ++seq });
+    });
+    col += cols + 1; // 栏之间空一列，栏头标签放在空列上更好看
+  }
+  return { out, bands };
+}
+
+// —— 方案 B：一行行铺齐（不分栏，按类型优先级 + 名字排序，Z 字铺满）——
+function planB(items) {
+  const order = (a, b) => KIND[a.kind].order - KIND[b.kind].order || a.name.localeCompare(b.name, "zh-Hans-CN");
+  const keep = items.filter((i) => i.kind === "sys").map((i) => ({ ...i }));
+  const rest = items.filter((i) => i.kind !== "sys").sort(order);
+  const out = [...keep];
+  let n = 0;
+  for (const i of rest) {
+    const col = 1 + (n % 24), row = Math.floor(n / 24);
+    const p = slotAt(col, row);
+    out.push({ ...i, x: p.x, y: p.y, seq: ++n });
+  }
+  return { out, bands: [] };
+}
+
+// —— 方案 C：真的建文件夹收进去（桌面只剩 系统项 + 快捷方式 + 客户文件夹 + 自动分类文件夹）——
+function planC(items) {
+  const byName = (a, b) => a.name.localeCompare(b.name, "zh-Hans-CN");
+  const out = items.filter((i) => i.kind === "sys").map((i) => ({ ...i }));
+  let seq = 0, col = 1;
+  for (const b of [
+    { list: items.filter((i) => i.kind === "lnk").sort(byName), cols: 2 },
+    { list: items.filter((i) => i.kind === "dir").sort(byName), cols: 2 }
+  ]) {
+    b.list.forEach((i, n) => {
+      const p = slotAt(col + (n % b.cols), Math.floor(n / b.cols));
+      out.push({ ...i, x: p.x, y: p.y, seq: ++seq });
+    });
+    col += b.cols + 1;
+  }
+  const folds = ["doc", "img", "other"]
+    .map((k) => ({ k, name: KIND[k].label, holds: items.filter((i) => i.kind === k).map((i) => i.name) }))
+    .filter((g) => g.holds.length > 0);
+  folds.forEach((g, n) => {
+    const p = slotAt(col + n, 0);
+    out.push({ name: g.name, kind: "dir", madeUp: true, x: p.x, y: p.y, seq: ++seq });
+  });
+  return { out, bands: [], folds };
+}
+
+// —— 方案 D：常用靠左，临时文件收到右边一栏 ——
+function planD(items) {
+  // 这台机器上「上次访问时间」不一定可靠，这里先按类型近似：
+  // 快捷方式 + 文件夹 = 常用，散文件（文档/图片/其他）= 临时
+  const hot = items.filter((i) => i.kind !== "sys" && (i.kind === "lnk" || i.kind === "dir"));
+  const cold = items.filter((i) => i.kind === "doc" || i.kind === "img" || i.kind === "other");
+  const out = items.filter((i) => i.kind === "sys").map((i) => ({ ...i }));
+  let seq = 0;
+  hot.sort((a, b) => KIND[a.kind].order - KIND[b.kind].order || a.name.localeCompare(b.name, "zh-Hans-CN"))
+    .forEach((i, n) => {
+      const p = slotAt(1 + (n % 12), Math.floor(n / 12));
+      out.push({ ...i, x: p.x, y: p.y, seq: ++seq });
+    });
+  cold.sort((a, b) => a.name.localeCompare(b.name, "zh-Hans-CN")).forEach((i, n) => {
+    const p = slotAt(23, n);
+    out.push({ ...i, x: p.x, y: p.y, seq: ++seq });
+  });
+  return {
+    out,
+    bands: [{ kind: "other", col: 23, cols: 1, rows: Math.max(cold.length, 3), tag: "临时" }]
+  };
+}
+
+const MODES = [
+  { id: "A", name: "A 自动分栏（推荐）", fn: planA,
+    note: "不用画区域：程序按类型自己留出竖栏，栏头一条色带写明「快捷方式 / 文件夹 / 文档 / 图片」。<b>只挪图标位置，文件不动</b>，撤销和找回逻辑照用现在的。" },
+  { id: "B", name: "B 一行行铺齐", fn: planB,
+    note: "最接近系统自带的「自动排列」，但按类型排过序。省事，代价是没有视觉边界，图标一多照样糊成一片。" },
+  { id: "C", name: "C 收进文件夹", fn: planC,
+    note: "桌面上真的建「文档 / 图片 / 其他」三个文件夹，把散文件<b>移动</b>进去 —— 这是唯一会动文件系统的一种，撤销要把文件搬回原路径，做之前需要你单独同意。" },
+  { id: "D", name: "D 常用靠左 · 临时靠右", fn: planD,
+    note: "把常用的留在手边，临时扔桌面的文件一律收到右边一栏，攒够几个小狗就来提醒你「这些要不要收进文件夹」。<b>依赖文件的上次访问时间，这个数据在本机可不可靠我还没验证</b>，所以现在图上是用类型近似的。" }
+];
+
+const scale = (x, y) => ({ left: (x / W) * 100, top: (y / H) * 100 });
+
+function draw(el, list, showSeq) {
+  el.innerHTML = "";
+  for (const i of list) {
+    const c = document.createElement("div");
+    c.className = "cell";
+    const w = (CW / W) * 100, h = (CH / H) * 100;
+    c.style.width = w + "%"; c.style.height = h + "%";
+    const p = scale(i.x, i.y);
+    c.style.left = p.left + "%"; c.style.top = p.top + "%";
+    const g = document.createElement("div");
+    g.className = "glyph";
+    g.style.background = i.madeUp ? "#E0A23B" : KIND[i.kind].color;
+    g.textContent = i.madeUp ? "🗂" : ICON[i.kind];
+    const l = document.createElement("div");
+    l.className = "label";
+    l.textContent = i.name;
+    c.append(g, l);
+    if (showSeq && i.seq) {
+      const s = document.createElement("div");
+      s.className = "seq"; s.textContent = i.seq;
+      c.append(s);
+    }
+    el.append(c);
+  }
+}
+
+function drawBands(el, bands) {
+  for (const b of bands) {
+    const d = document.createElement("div");
+    d.className = "band";
+    d.style.left = ((OX + b.col * CW) / W) * 100 + "%";
+    d.style.top = ((OY - 2) / H) * 100 + "%";
+    d.style.width = ((b.cols * CW) / W) * 100 + "%";
+    d.style.height = ((b.rows * CH + 6) / H) * 100 + "%";
+    const t = document.createElement("b");
+    t.textContent = b.tag || KIND[b.kind].label;
+    t.style.background = KIND[b.kind].color;
+    d.append(t);
+    el.append(d);
+  }
+}
+
+const modesEl = document.getElementById("modes");
+const afterEl = document.getElementById("after");
+for (const m of MODES) {
+  const b = document.createElement("button");
+  b.setAttribute("data-slot", "button");
+  b.dataset.active = m.id === "A" ? "true" : "false";
+  b.textContent = m.name;
+  b.onclick = () => {
+    for (const x of modesEl.children) x.dataset.active = "false";
+    b.dataset.active = "true";
+    render(m);
+  };
+  modesEl.append(b);
+}
+document.getElementById("legend").innerHTML = Object.entries(KIND)
+  .filter(([k]) => ITEMS.some((i) => i.kind === k))
+  .map(([k, v]) => `<span><i style="background:${v.color}"></i>${v.label}</span>`).join("");
+
+function render(m) {
+  const r = m.fn(ITEMS);
+  afterEl.innerHTML = "";
+  draw(afterEl, r.out, true);
+  drawBands(afterEl, r.bands || []);
+  document.getElementById("modeName").textContent = m.name;
+  document.getElementById("modeNote").innerHTML = m.note;
+  const moved = r.out.filter((i) => i.seq).length;
+  const folds = r.folds ? `；${r.folds.reduce((a, g) => a + g.holds.length, 0)} 个散文件被移进文件夹` : "";
+  document.getElementById("afterStat").textContent =
+    `${r.out.length} 个图标（现在 ${ITEMS.length}），小狗要衔 ${moved} 次${folds}`;
+}
+
+draw(document.getElementById("now"), ITEMS, false);
+document.getElementById("nowStat").textContent = `${ITEMS.length} 个图标 · 1920×1040 · 缩放 100%`;
+render(MODES[0]);
+</script>
+</body>
+</html>

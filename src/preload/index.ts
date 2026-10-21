@@ -4,13 +4,19 @@ import {
   type AteEvent,
   type AppConfig,
   type FeedReply,
+  type FoldPreviewResult,
+  type FoldUndoResult,
+  type MenuAction,
+  type MenuRequest,
+  type NewsReply,
   type OrganizeEvent,
   type OrganizeResult,
   type PetBridge,
   type Rect,
   type Settings,
   type UiState,
-  type UndoResult
+  type UndoResult,
+  type WeatherReply
 } from "../shared/ipc";
 
 /**
@@ -59,26 +65,50 @@ const api: PetBridge = {
   seedZones(): Promise<UiState> {
     return ipcRenderer.invoke(IPC.seedZones) as Promise<UiState>;
   },
-  setFeedingMode(seconds: number): Promise<number> {
-    return ipcRenderer.invoke(IPC.setFeedingMode, seconds) as Promise<number>;
-  },
   organize(): Promise<OrganizeResult> {
     return ipcRenderer.invoke(IPC.organize) as Promise<OrganizeResult>;
   },
   previewOrganize(): Promise<OrganizeResult> {
     return ipcRenderer.invoke(IPC.previewOrganize) as Promise<OrganizeResult>;
   },
+  foldPreview(): Promise<FoldPreviewResult> {
+    return ipcRenderer.invoke(IPC.foldPreview) as Promise<FoldPreviewResult>;
+  },
+  foldRun(): Promise<OrganizeResult> {
+    return ipcRenderer.invoke(IPC.foldRun) as Promise<OrganizeResult>;
+  },
+  columnsRun(): Promise<OrganizeResult> {
+    return ipcRenderer.invoke(IPC.columnsRun) as Promise<OrganizeResult>;
+  },
+  onFoldAsk(handler: (preview: FoldPreviewResult) => void): void {
+    ipcRenderer.on(IPC.foldAsk, (_event, payload: FoldPreviewResult) => handler(payload));
+  },
   undoOrganize(): Promise<UndoResult> {
     return ipcRenderer.invoke(IPC.undoOrganize) as Promise<UndoResult>;
+  },
+  undoFold(): Promise<FoldUndoResult> {
+    return ipcRenderer.invoke(IPC.undoFold) as Promise<FoldUndoResult>;
   },
   settleIcon(name: string): void {
     ipcRenderer.send(IPC.settleIcon, name);
   },
-  getWeather(): Promise<string> {
-    return ipcRenderer.invoke(IPC.weather) as Promise<string>;
+  grabIcon(name: string): Promise<boolean> {
+    return ipcRenderer.invoke(IPC.grabIcon, name) as Promise<boolean>;
   },
-  onNews(handler: (text: string) => void): void {
-    ipcRenderer.on(IPC.news, (_event, text: string) => handler(text));
+  cancelCarry(): void {
+    ipcRenderer.send(IPC.carryCancel);
+  },
+  getWeather(): Promise<WeatherReply> {
+    return ipcRenderer.invoke(IPC.weather) as Promise<WeatherReply>;
+  },
+  getNews(): Promise<NewsReply> {
+    return ipcRenderer.invoke(IPC.news) as Promise<NewsReply>;
+  },
+  onMenu(handler: (request: MenuRequest | null) => void): void {
+    ipcRenderer.on(IPC.menuShow, (_event, request: MenuRequest | null) => handler(request));
+  },
+  pickMenu(action: MenuAction | null): void {
+    ipcRenderer.send(IPC.menuPick, action);
   }
 };
 
